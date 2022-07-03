@@ -51,7 +51,7 @@ class Fourier_render(torch.nn.Module):
         coord_ = coord.clone()  # N,bsize,2
         fourier_projection = F.grid_sample(
             feat, coord_.flip(-1).unsqueeze(1),
-            mode='nearest', align_corners=False)[:, :, 0, :] \
+            mode='bilinear', align_corners=False)[:, :, 0, :] \
             .permute(0, 2, 1)  # N,bsize,3C
 
         emb_fn, out_dims = fourier_embed.get_embedder(8, if_embed=True)

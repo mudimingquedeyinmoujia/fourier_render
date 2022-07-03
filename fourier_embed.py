@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-
+import math
 
 class Embedder:
     def __init__(self, **kwargs):
@@ -21,13 +21,13 @@ class Embedder:
         # when x=0 or y=0
         for freq in range(1,max_freq+1):
             for p_fn in [torch.sin, torch.cos]:
-                embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq * torch.pi))
+                embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq * math.pi))
                 out_dim += d
         # other situation
         for freqx in range(1,max_freq+1):
             for freqy in range(1,max_freq+1):
-                for p_fn in [lambda x,y:torch.cos(x*torch.pi)*torch.cos(y*torch.pi),lambda x,y:torch.cos(x*torch.pi)*torch.sin(y*torch.pi),
-                             lambda x,y:torch.sin(x*torch.pi)*torch.cos(y*torch.pi),lambda x,y:torch.sin(x*torch.pi)*torch.sin(y*torch.pi)]:
+                for p_fn in [lambda x,y:torch.cos(x*math.pi)*torch.cos(y*math.pi),lambda x,y:torch.cos(x*math.pi)*torch.sin(y*math.pi),
+                             lambda x,y:torch.sin(x*math.pi)*torch.cos(y*math.pi),lambda x,y:torch.sin(x*math.pi)*torch.sin(y*math.pi)]:
                     embed_fns.append(lambda x,p_fn=p_fn,freqx=freqx,freqy=freqy:p_fn(x[:,:,0]*freqx,x[:,:,1]*freqy).reshape(x.shape[0],x.shape[1],1))
 
         embed_fns.append(lambda x:torch.ones((x.shape[0],x.shape[1],1)))
@@ -36,13 +36,13 @@ class Embedder:
         self.out_dim = out_dim
 
     def embed(self, inputs):
-        channel=torch.cat([fn(inputs) for fn in self.embed_fns], -1)
+        channel=torch.cat([fn(inputs).to(inputs.device) for fn in self.embed_fns], -1)
         return channel.repeat(1,1,3)  # 按照最后一维拼接，拼接后维度不变
 
 
 def get_embedder(multires, if_embed=True):
     """
-    获取位置编码函数与位置编码后的维度,没有使用pi
+    获取位置编码函数与位置编码后的维度,使用pi
     :param multires: sinx sin2x sin3x ... sin nx
     :param if_embed: if use embed
     :return: example: x,y ---> 1,cosy,siny,cos2y,sin2y,... outdim=4*n*n+2*n*2+1
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     print(features_ten)
     print(features_ten.shape)
 
-    features_ten = features_ten / torch.pi
+    features_ten = features_ten / math.pi
     emb_fn, out_dims = get_embedder(8, if_embed=True)
     print(emb_fn(features_ten), out_dims*3)
 

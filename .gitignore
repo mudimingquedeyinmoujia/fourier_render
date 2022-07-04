@@ -2,3 +2,6 @@ __pycache__/
 imgs/
 .idea/
 ckpts/
+test.py
+notes.md
+ckpt_imgs/

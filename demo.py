@@ -1,5 +1,5 @@
 import torch
-from liif_render import Fourier_render,Fourier_render_patch,Fourier_render_patch_int
+from liif_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
 import fourier_embed
 from torchvision import utils
 import os
@@ -7,6 +7,7 @@ import PIL.Image
 from PIL import Image
 from torchvision import transforms
 import os
+import math
 from torch import nn, autograd, optim
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
@@ -16,18 +17,18 @@ def ssim_loss(ssim_metric):
 imgpath='./00018.png'
 img=Image.open(imgpath)
 device=torch.device('cuda:0')
-info='res32to1024_v2'
+info='res32to1024_v6'
 target_res=1024
 
 transform_bicub = transforms.Compose([
-    transforms.Resize((256, 256),interpolation=PIL.Image.BICUBIC),
+    transforms.Resize((target_res, target_res),interpolation=PIL.Image.BICUBIC),
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))])
 transform_equal = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))])
 
-img_target=transform_equal(img).to(device).unsqueeze(0)
+img_target=transform_bicub(img).to(device).unsqueeze(0)
 # transforms.ToPILImage()(img_target).save('00018_256_target.png')
 img_init=torch.rand(1,867,32,32).to(device)
 optimizer = optim.Adam(
@@ -35,7 +36,7 @@ optimizer = optim.Adam(
         lr=0.005,
         betas=(0.9, 0.99),
     )
-render=Fourier_render_patch_int()
+render=Fourier_render_patch()
 
 num_iters=6000
 img_init.requires_grad=True
@@ -44,7 +45,7 @@ ssim_metric=SSIM(data_range=1,size_average=True,channel=3)
 for i in range(num_iters+1):
     optimizer.zero_grad()
     render.zero_grad()
-    img_render=render(img_init,h=target_res,w=target_res)
+    img_render=render(img_init,h=target_res,w=target_res,omega=0.8*math.pi)
     # ms_ssim_m = ms_ssim_metric((img_render + 1) / 2, (img_target + 1) / 2)
     ssim_m = ssim_metric((img_render + 1) / 2, (img_target + 1) / 2)
     loss1 = ssim_loss(ssim_m)
@@ -53,7 +54,7 @@ for i in range(num_iters+1):
     # l2 loss
     optimizer.zero_grad()
     render.zero_grad()
-    img_render = render(img_init, h=target_res, w=target_res)
+    img_render = render(img_init, h=target_res, w=target_res,omega=0.8*math.pi)
     loss2=(img_render-img_target).pow(2).mean()
     loss2.backward()
     optimizer.step()

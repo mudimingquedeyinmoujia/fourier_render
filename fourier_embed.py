@@ -14,7 +14,7 @@ class Embedder:
         d = self.kwargs['input_dims']
         out_dim = 0
         if self.kwargs['include_input']:  # false
-            embed_fns.append(lambda x: x)
+            embed_fns.append(lambda x: x/self.kwargs['omega'])
             out_dim += d
 
         max_freq = self.kwargs['multires']
@@ -22,15 +22,15 @@ class Embedder:
         # when x=0 or y=0 ---> 4n elements
         for freq in range(1, max_freq + 1):
             for p_fn in [torch.sin, torch.cos]:
-                embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq * math.pi))
+                embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq))
                 out_dim += d
         # other situation ---> 4n*n elements
         for freqx in range(1, max_freq + 1):
             for freqy in range(1, max_freq + 1):
-                for p_fn in [lambda x, y: torch.cos(x * math.pi) * torch.cos(y * math.pi),
-                             lambda x, y: torch.cos(x * math.pi) * torch.sin(y * math.pi),
-                             lambda x, y: torch.sin(x * math.pi) * torch.cos(y * math.pi),
-                             lambda x, y: torch.sin(x * math.pi) * torch.sin(y * math.pi)]:
+                for p_fn in [lambda x, y: torch.cos(x) * torch.cos(y),
+                             lambda x, y: torch.cos(x) * torch.sin(y),
+                             lambda x, y: torch.sin(x) * torch.cos(y),
+                             lambda x, y: torch.sin(x) * torch.sin(y)]:
                     embed_fns.append(lambda x, p_fn=p_fn, freqx=freqx, freqy=freqy: p_fn(x[:, :, 0] * freqx,
                                                                                          x[:, :, 1] * freqy).reshape(
                         x.shape[0], x.shape[1], 1))
@@ -41,11 +41,11 @@ class Embedder:
         self.out_dim = out_dim
 
     def embed(self, inputs):
-        channel = torch.cat([fn(inputs).to(inputs.device) for fn in self.embed_fns], -1)
+        channel = torch.cat([fn(inputs*self.kwargs['omega']).to(inputs.device) for fn in self.embed_fns], -1)
         return channel.repeat(1, 1, 3)  # channel copy from 1 to 3 (grey to RGB)
 
 
-def get_embedder(multires, if_embed=True):
+def get_embedder(multires,omega, if_embed=True):
     """
     获取位置编码函数与位置编码后的维度,使用pi
     :param multires: n
@@ -59,6 +59,7 @@ def get_embedder(multires, if_embed=True):
         'include_input': False,  # 输出的编码是否包含输入的特征本身
         'input_dims': 2,  # 位置坐标数量，二维
         'multires': multires,
+        'omega': omega,
     }
 
     embedder_obj = Embedder(**embed_kwargs)
@@ -85,5 +86,5 @@ if __name__ == '__main__':
     print(features_ten.shape)
 
     features_ten = features_ten / math.pi
-    emb_fn, out_dims = get_embedder(8, if_embed=True)
+    emb_fn, out_dims = get_embedder(8,math.pi, if_embed=True)
     print(emb_fn(features_ten), out_dims * 3)

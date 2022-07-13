@@ -1,5 +1,5 @@
 import torch
-from liif_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
+from Fourier_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
 import fourier_embed
 from torchvision import utils
 import os
@@ -17,7 +17,7 @@ def ssim_loss(ssim_metric):
 imgpath='./00018.png'
 img=Image.open(imgpath)
 device=torch.device('cuda:0')
-info='res32to1024_v6'
+info='res32to1024_v3'
 target_res=1024
 
 transform_bicub = transforms.Compose([
@@ -45,7 +45,7 @@ ssim_metric=SSIM(data_range=1,size_average=True,channel=3)
 for i in range(num_iters+1):
     optimizer.zero_grad()
     render.zero_grad()
-    img_render=render(img_init,h=target_res,w=target_res,omega=0.8*math.pi)
+    img_render=render(img_init,h=target_res,w=target_res,omega=0.5*math.pi)
     # ms_ssim_m = ms_ssim_metric((img_render + 1) / 2, (img_target + 1) / 2)
     ssim_m = ssim_metric((img_render + 1) / 2, (img_target + 1) / 2)
     loss1 = ssim_loss(ssim_m)
@@ -54,7 +54,7 @@ for i in range(num_iters+1):
     # l2 loss
     optimizer.zero_grad()
     render.zero_grad()
-    img_render = render(img_init, h=target_res, w=target_res,omega=0.8*math.pi)
+    img_render = render(img_init, h=target_res, w=target_res,omega=0.5*math.pi)
     loss2=(img_render-img_target).pow(2).mean()
     loss2.backward()
     optimizer.step()

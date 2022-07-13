@@ -1,5 +1,5 @@
 import torch
-from liif_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
+from Fourier_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
 from torchvision import utils
 from tqdm import tqdm
 import math

@@ -17,8 +17,8 @@ def ssim_loss(ssim_metric):
 imgpath='./00018.png'
 img=Image.open(imgpath)
 device=torch.device('cuda:0')
-info='res32to1024_v3'
-target_res=1024
+info='res32to512_v3_10step_lr01'
+target_res=512
 
 transform_bicub = transforms.Compose([
     transforms.Resize((target_res, target_res),interpolation=PIL.Image.BICUBIC),
@@ -33,10 +33,10 @@ img_target=transform_bicub(img).to(device).unsqueeze(0)
 img_init=torch.rand(1,867,32,32).to(device)
 optimizer = optim.Adam(
         [img_init],
-        lr=0.005,
+        lr=0.1,
         betas=(0.9, 0.99),
     )
-render=Fourier_render_patch()
+render=Fourier_render_patch_int()
 
 num_iters=6000
 img_init.requires_grad=True
@@ -59,7 +59,7 @@ for i in range(num_iters+1):
     loss2.backward()
     optimizer.step()
 
-    if i % 200 == 0:
+    if i % 10 == 0:
         utils.save_image(
             img_render,
             f'./imgs/{info}_{str(i).zfill(6)}.png',

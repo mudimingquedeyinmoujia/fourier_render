@@ -4,6 +4,14 @@ import torch.nn as nn
 import math
 
 
+def calc_ind(s, e):
+    if s == 0:
+        start_ind = 0
+    else:
+        start_ind = 4 * (s - 1) * (s - 1) + 4 * (s - 1) + 1
+    end_ind = 4 * e * e + 4 * e + 1
+    return start_ind, end_ind, end_ind - start_ind
+
 class Embedder:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -41,20 +49,14 @@ class Embedder:
         self.embed_fns = embed_fns
         self.out_dim = out_dim
 
-    def calc_ind(self, s, e):
-        if s == 0:
-            start_ind = 0
-        else:
-            start_ind = 4 * (s - 1) * (s - 1) + 4 * (s - 1) + 1
-        end_ind = 4 * e * e + 4 * e + 1
-        return start_ind, end_ind, end_ind - start_ind
+
 
     def embed(self, inputs, s, e, repeat):
         if e is None:
             e = self.kwargs['multires']
         assert e <= self.kwargs['multires'] and e >= 0
         assert s <= self.kwargs['multires'] and s >= 0
-        start_ind, end_ind, dim = self.calc_ind(s, e)
+        start_ind, end_ind, dim = calc_ind(s, e)
         tmp_embed_fns = self.embed_fns[start_ind:end_ind]
         channel = torch.cat([fn(inputs * self.kwargs['omega']).to(inputs.device) for fn in tmp_embed_fns], -1)
         if repeat:

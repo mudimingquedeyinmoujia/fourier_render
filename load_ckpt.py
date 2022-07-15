@@ -3,16 +3,17 @@ from Fourier_render import Fourier_render_patch,Fourier_render_patch_int,Fourier
 from torchvision import utils
 from tqdm import tqdm
 import math
-ckpt_path='./ckpts/res32to512_v6_000800.pth'
+ckpt_path='./ckpts/res32to512_v3_10step_lr001_000200.pth'
 device=torch.device('cuda:0')
-info='res32to512_v6_800iter'
+info='res32to512_v3_10step_lr001_000200'
 
 img_implicit=torch.load(ckpt_path,map_location=lambda storage,loc:storage).to(device)
-render=Fourier_render_patch()
-# res_list=[res for res in range(256,1024,50)]+[512]
-res_list=[512]
+# img_implicit=torch.clamp(img_implicit,max=1.)
+render=Fourier_render_patch_int()
+# res_list=[res for res in range(256,900,100)]+[512]
+res_list=[800]
 for res in tqdm(res_list):
-    img_render=render(img_implicit,h=res,w=res,omega=0.8*math.pi)
+    img_render=render(img_implicit,h=res,w=res,omega=0.5*math.pi)
     utils.save_image(
         img_render,
         f'./ckpt_imgs/{info}_{str(res)}.png',

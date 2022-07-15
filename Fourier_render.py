@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-import fourier_embed
+from fourier_embed import *
 import math
 
 
@@ -54,7 +54,7 @@ class Fourier_render_F(torch.nn.Module):
             mode='bilinear', align_corners=False)[:, :, 0, :] \
             .permute(0, 2, 1)  # N,bsize,3C
 
-        emb_fn, out_dims = fourier_embed.get_embedder(8, math.pi, if_embed=True)
+        emb_fn, out_dims = get_embedder(8, math.pi, if_embed=True)
         fourier_base, _ = emb_fn(coord)  # N,bsize,3C
 
         fourier_series = fourier_projection * fourier_base  # N,bsize,3C
@@ -119,7 +119,7 @@ class Fourier_render_patch(torch.nn.Module):
 
     def query_F(self, feat, coord, mul):
         # feat: N,3C,H,W / coord:  N,bsize,2
-        assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
+        # assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
         coord_ = coord.clone()  # N,bsize,2
         coord_.clamp_(-1 + 1e-6, 1 - 1e-6)
         fourier_projection = F.grid_sample(
@@ -139,12 +139,12 @@ class Fourier_render_patch(torch.nn.Module):
         rel_coord[:, :, 0] *= feat.shape[-2]
         rel_coord[:, :, 1] *= feat.shape[-1]  # scale to -1,1
 
-        fourier_base, _ = self.emb_fn(rel_coord)  # N,bsize,3C
+        fourier_base, tmp_dim = self.emb_fn(rel_coord,s=self.tmp_start,e=self.tmp_end)  # N,bsize,3C
 
         fourier_series = fourier_projection * fourier_base  # N,bsize,3C
-        f_R = torch.sum(fourier_series[:, :, :self.out_dims + 1], dim=2, keepdim=True)
-        f_G = torch.sum(fourier_series[:, :, self.out_dims + 1:2 * self.out_dims + 1], dim=2, keepdim=True)
-        f_B = torch.sum(fourier_series[:, :, 2 * self.out_dims + 1:], dim=2, keepdim=True)
+        f_R = torch.sum(fourier_series[:, :, :tmp_dim], dim=2, keepdim=True)
+        f_G = torch.sum(fourier_series[:, :, tmp_dim:2 * tmp_dim], dim=2, keepdim=True)
+        f_B = torch.sum(fourier_series[:, :, 2 * tmp_dim:], dim=2, keepdim=True)
         ret = torch.cat([f_R, f_G, f_B], dim=-1)  # N,bsize,3
         return ret
 
@@ -166,9 +166,15 @@ class Fourier_render_patch(torch.nn.Module):
 
         return pred
 
-    def forward(self, img_feature, h=256, w=256, mul=8, cell_scale=1, omega=math.pi, bsize=30000):
-        self.emb_fn, self.out_dims = fourier_embed.get_embedder(multires=mul, omega=omega,
+    def forward(self, img_feature, h=256, w=256, mul=8,s=0,e=None, cell_scale=1, omega=math.pi, bsize=30000):
+        self.emb_fn, self.out_dims = get_embedder(multires=mul, omega=omega,
                                                                 if_embed=True)  # out_dims = C not 3C
+        self.tmp_start = s
+        self.tmp_end = e
+        if e is None:
+            e=mul
+        _, _, dms = calc_ind(s, e)
+        assert img_feature.shape[1] == dms * 3
         coord = make_coord((h, w)).to(img_feature.device)  # h*w,2
         cell = 2 / (h * cell_scale) / 2  # cell_scale>1 for SR
         N = img_feature.shape[0]
@@ -193,7 +199,7 @@ class Fourier_render_patch_int(torch.nn.Module):
 
     def query_F(self, feat, coord, mul):
         # feat: N,3C,H,W / coord:  N,bsize,2
-        assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
+        # assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
         vx_lst = [-1, 1]
         vy_lst = [-1, 1]
         eps_shift = 1e-6
@@ -222,11 +228,11 @@ class Fourier_render_patch_int(torch.nn.Module):
                 rel_coord = coord - q_coord  # N,bsize,2
                 rel_coord[:, :, 0] *= feat.shape[-2]
                 rel_coord[:, :, 1] *= feat.shape[-1]  # scale to -1,1
-                fourier_base_tmp, _ = self.emb_fn(rel_coord)  # N,bsize,3C
+                fourier_base_tmp, tmp_dim = self.emb_fn(rel_coord,s=self.tmp_start,e=self.tmp_end)  # N,bsize,3C
                 fourier_series = fourier_projection_tmp * fourier_base_tmp  # N,bsize,3C
-                f_R = torch.sum(fourier_series[:, :, :self.out_dims + 1], dim=2, keepdim=True)
-                f_G = torch.sum(fourier_series[:, :, self.out_dims + 1:2 * self.out_dims + 1], dim=2, keepdim=True)
-                f_B = torch.sum(fourier_series[:, :, 2 * self.out_dims + 1:], dim=2, keepdim=True)
+                f_R = torch.sum(fourier_series[:, :, :tmp_dim], dim=2, keepdim=True)
+                f_G = torch.sum(fourier_series[:, :, tmp_dim:2 * tmp_dim], dim=2, keepdim=True)
+                f_B = torch.sum(fourier_series[:, :, 2 * tmp_dim:], dim=2, keepdim=True)
                 pred = torch.cat([f_R, f_G, f_B], dim=-1)  # N,bsize,3
                 preds.append(pred)
                 area = torch.abs(rel_coord[:, :, 0] * rel_coord[:, :, 1])
@@ -263,9 +269,15 @@ class Fourier_render_patch_int(torch.nn.Module):
 
         return pred
 
-    def forward(self, img_feature, h=256, w=256, mul=8, cell_scale=1, omega=math.pi, bsize=30000):
-        self.emb_fn, self.out_dims = fourier_embed.get_embedder(multires=mul, omega=omega,
+    def forward(self, img_feature, h=256, w=256, mul=8,s=0,e=None, cell_scale=1, omega=0.5*math.pi, bsize=30000):
+        self.emb_fn, self.out_dims = get_embedder(multires=mul, omega=omega,
                                                                 if_embed=True)  # out_dims = C not 3C
+        self.tmp_start=s
+        self.tmp_end=e
+        if e is None:
+            e=mul
+        _,_,dms=calc_ind(s,e)
+        assert img_feature.shape[1] == dms*3
         coord = make_coord((h, w)).to(img_feature.device)  # h*w,2
         cell = 2 / (h * cell_scale) / 2  # cell_scale>1 for SR
         N = img_feature.shape[0]
@@ -290,7 +302,7 @@ class Fourier_render_patch_avg(torch.nn.Module):
 
     def query_F(self, feat, coord, mul):
         # feat: N,3C,H,W / coord:  N,bsize,2
-        assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
+        # assert feat.shape[1] == (4 * mul * mul + 4 * mul + 1) * 3
         vx_lst = [-1, 1]
         vy_lst = [-1, 1]
         eps_shift = 1e-6
@@ -318,11 +330,11 @@ class Fourier_render_patch_avg(torch.nn.Module):
                 rel_coord = coord_ - q_coord  # N,bsize,2
                 rel_coord[:, :, 0] *= feat.shape[-2]
                 rel_coord[:, :, 1] *= feat.shape[-1]  # scale to -1,1
-                fourier_base_tmp,_ = self.emb_fn(rel_coord)  # N,bsize,3C
+                fourier_base_tmp, tmp_dim = self.emb_fn(rel_coord,s=self.tmp_start,e=self.tmp_end)  # N,bsize,3C
                 fourier_series = fourier_projection_tmp * fourier_base_tmp  # N,bsize,3C
-                f_R = torch.sum(fourier_series[:, :, :self.out_dims + 1], dim=2, keepdim=True)
-                f_G = torch.sum(fourier_series[:, :, self.out_dims + 1:2 * self.out_dims + 1], dim=2, keepdim=True)
-                f_B = torch.sum(fourier_series[:, :, 2 * self.out_dims + 1:], dim=2, keepdim=True)
+                f_R = torch.sum(fourier_series[:, :, :tmp_dim], dim=2, keepdim=True)
+                f_G = torch.sum(fourier_series[:, :, tmp_dim:2 * tmp_dim], dim=2, keepdim=True)
+                f_B = torch.sum(fourier_series[:, :, 2 * tmp_dim:], dim=2, keepdim=True)
                 pred = torch.cat([f_R, f_G, f_B], dim=-1)  # N,bsize,3
                 preds.append(pred)
 
@@ -347,9 +359,15 @@ class Fourier_render_patch_avg(torch.nn.Module):
 
         return pred
 
-    def forward(self, img_feature, h=256, w=256, mul=8, cell_scale=1, omega=math.pi, bsize=30000):
-        self.emb_fn, self.out_dims = fourier_embed.get_embedder(multires=mul, omega=omega,
+    def forward(self, img_feature, h=256, w=256, mul=8,s=0,e=None, cell_scale=1, omega=math.pi, bsize=30000):
+        self.emb_fn, self.out_dims = get_embedder(multires=mul, omega=omega,
                                                                 if_embed=True)  # out_dims = C not 3C
+        self.tmp_start = s
+        self.tmp_end = e
+        if e is None:
+            e=mul
+        _, _, dms = calc_ind(s, e)
+        assert img_feature.shape[1] == dms * 3
         coord = make_coord((h, w)).to(img_feature.device)  # h*w,2
         cell = 2 / (h * cell_scale) / 2  # cell_scale>1 for SR
         N = img_feature.shape[0]

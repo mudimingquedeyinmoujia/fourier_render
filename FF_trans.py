@@ -17,7 +17,7 @@ def resize_img(img_path,target_res,save_name):
     img_target = transform_bicub(img)
     transforms.ToPILImage()(img_target.squeeze()).save(save_name)
 
-img_path='./imgs/res32to512_v3_000400.png'
+img_path='./imgs_net/net1024_v8_10step_lr001_000500_001024_8.png'
 # resize_img(img_path,512,'00018_res512.png')
 img = cv2.imread(img_path,0)
 img_float32 = np.float32(img)

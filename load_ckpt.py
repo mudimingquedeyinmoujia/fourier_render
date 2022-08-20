@@ -1,23 +1,51 @@
 import torch
-from Fourier_render import Fourier_render_patch,Fourier_render_patch_int,Fourier_render_patch_avg
+from Fourier_render import Fourier_render_patch, Fourier_render_patch_int, Fourier_render_patch_avg
 from torchvision import utils
 from tqdm import tqdm
 import math
-ckpt_path='./ckpts/res32to512_v3_10step_lr001_000200.pth'
-device=torch.device('cuda:0')
-info='res32to512_v3_10step_lr001_000200'
+from Fourier_net import FourierNet
 
-img_implicit=torch.load(ckpt_path,map_location=lambda storage,loc:storage).to(device)
+ckpt_path = 'ckpts/net1024_v8_10step_lr001_000500.pth'
+device = torch.device('cuda:0')
+info = 'net1024_v8_10step_lr001_000500'
+
+ckpt = torch.load(ckpt_path, map_location=lambda storage, loc: storage)
+net = FourierNet(all_freq=8).to(device)
+net.load_state_dict(ckpt)
+
 # img_implicit=torch.clamp(img_implicit,max=1.)
-render=Fourier_render_patch_int()
 # res_list=[res for res in range(256,900,100)]+[512]
-res_list=[800]
+res_list = [1024]
 for res in tqdm(res_list):
-    img_render=render(img_implicit,h=res,w=res,omega=0.5*math.pi)
-    utils.save_image(
-        img_render,
-        f'./ckpt_imgs/{info}_{str(res)}.png',
-        nrow=1,
-        normalize=True,
-        range=(-1,1),
-    )
+    img_render = net(h=res, w=res)
+    for j in range(9):
+        utils.save_image(
+            img_render[j],
+            f'./imgs_net/{info}_{str(res).zfill(6)}_{j}.png',
+            nrow=1,
+            normalize=True,
+            range=(-1, 1),
+        )
+
+
+    # utils.save_image(
+    #     img_render,
+    #     f'./ckpt_imgs/{info}_{str(res)}_full.png',
+    #     nrow=1,
+    #     normalize=True,
+    #     range=(-1, 1),
+    # )
+    # utils.save_image(
+    #     img_render1,
+    #     f'./ckpt_imgs/{info}_{str(res)}_1.png',
+    #     nrow=1,
+    #     normalize=True,
+    #     range=(-1, 1),
+    # )
+    # utils.save_image(
+    #     img_render2,
+    #     f'./ckpt_imgs/{info}_{str(res)}_2.png',
+    #     nrow=1,
+    #     normalize=True,
+    #     range=(-1, 1),
+    # )
